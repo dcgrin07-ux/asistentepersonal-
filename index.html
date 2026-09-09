@@ -204,7 +204,17 @@
     const app = initializeApp(firebaseConfig);
     const dbFirestore = getFirestore(app);
 
-    // Capa de Servicio conectada a Firebase Cloud Firestore
+    // Variables globales de datos inicializadas en vacío para evitar bloqueos
+    let db = [];
+    let agendaHospital = {};
+    let listaEsperaData = '';
+    let exPacientesDb = [];
+
+    let ambitoActual = '';
+    let diaActual = '';
+    let turnoActualIdx = null;
+    let pacienteActualNombre = '';
+
     const StorageService = {
         async getDb() {
             try {
@@ -218,7 +228,7 @@
             try {
                 let ref = doc(dbFirestore, "datos", "general_db");
                 await setDoc(ref, { items });
-            } catch(e) { console.error(e); }
+            } catch(e) { console.error(e); alert("Error al guardar en la nube."); }
         },
         async getAgendaHospital() {
             try {
@@ -264,16 +274,7 @@
         }
     };
 
-    let db = [];
-    let agendaHospital = {};
-    let listaEsperaData = '';
-    let exPacientesDb = [];
-
-    let ambitoActual = '';
-    let diaActual = '';
-    let turnoActualIdx = null;
-    let pacienteActualNombre = '';
-
+    // Carga inicial al arrancar la app
     async function initApp() {
         db = await StorageService.getDb();
         agendaHospital = await StorageService.getAgendaHospital();
@@ -531,6 +532,8 @@
         let p = `Redacta un/a ${tipo} para el/la paciente (DNI: ${dni}). Detalles clínicos: ${obs}`;
         document.getElementById('prompt-box').value = p;
     };
+
+    window.generrPromptGen = function() {}; // Alias por seguridad
 
     window.generarPromptGen = function() {
         let tipo = document.getElementById('tipo-doc-gen').value;
