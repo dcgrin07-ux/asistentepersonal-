@@ -105,14 +105,14 @@
 <div class="container">
     <!-- MENÚ PRINCIPAL -->
     <div id="nav-menu">
-        <h1>Ámbito de Trabajo (Nube Firebase)</h1>
+        <h1>Ámbito de Trabajo (Firebase + Local)</h1>
         <button class="btn-menu" onclick="iniciarModulo('ESCUELA')">🏫 ESCUELA</button>
         <button class="btn-menu" onclick="iniciarModulo('EIPRI')">👶 EIPRI</button>
         <button class="btn-menu" style="background:#16a085" onclick="iniciarMenuHospital()">🏥 HOSPITAL (Agenda y Consultorio)</button>
         <hr>
-        <button class="btn-menu" style="background:#8e44ad" onclick="document.getElementById('file-input').click()">📂 CARGAR RESPALDO DESDE DRIVE</button>
+        <button class="btn-menu" style="background:#8e44ad" onclick="document.getElementById('file-input').click()">📂 CARGAR RESPALDO</button>
         <input type="file" id="file-input" accept=".json" onchange="cargarRespaldo(event)">
-        <button class="btn-menu" style="background:#d35400" onclick="exportarRespaldo()">3. DESCARGAR RESPALDO GENERAL</button>
+        <button class="btn-menu" style="background:#d35400" onclick="exportarRespaldo()">DESCARGAR RESPALDO GENERAL</button>
     </div> 
 
     <!-- SUBMENÚ HOSPITAL (Días) -->
@@ -186,7 +186,7 @@
     </div>
 </div> 
 
-<!-- SDKs de Firebase (Firestore) -->
+<!-- SDKs de Firebase y Lógica -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -201,87 +201,67 @@
         measurementId: "G-D6SZ491VNZ"
     };
 
-    const app = initializeApp(firebaseConfig);
-    const dbFirestore = getFirestore(app);
+    let dbFirestore = null;
+    try {
+        const app = initializeApp(firebaseConfig);
+        dbFirestore = getFirestore(app);
+    } catch(e) { console.error("Firebase init error:", e); }
 
-    // Variables globales de datos inicializadas en vacío para evitar bloqueos
-    let db = [];
-    let agendaHospital = {};
-    let listaEsperaData = '';
-    let exPacientesDb = [];
+    // Memoria local de respaldo inmediato garantizado
+    let db = JSON.parse(localStorage.getItem('psico_db') || '[]');
+    let agendaHospital = JSON.parse(localStorage.getItem('psico_agenda') || '{}');
+    let listaEsperaData = localStorage.getItem('psico_espera') || '';
+    let exPacientesDb = JSON.parse(localStorage.getItem('psico_ex') || '[]');
 
     let ambitoActual = '';
     let diaActual = '';
     let turnoActualIdx = null;
     let pacienteActualNombre = '';
 
+    // Sincronización híbrida (Intenta nube, respalda localmente de inmediato)
     const StorageService = {
-        async getDb() {
+        async sincronizarRemoto() {
+            if (!dbFirestore) return;
             try {
                 let ref = doc(dbFirestore, "datos", "general_db");
                 let snap = await getDoc(ref);
-                if (snap.exists()) return snap.data().items || [];
-            } catch(e) { console.error(e); }
-            return [];
+                if (snap.exists()) {
+                    let remoteItems = snap.data().items || [];
+                    if (remoteItems.length > 0) {
+                        db = remoteItems;
+                        localStorage.setItem('psico_db', JSON.stringify(db));
+                    }
+                } else {
+                    await setDoc(ref, { items: db });
+                }
+
+                let refAgenda = doc(dbFirestore, "datos", "agenda_hospital");
+                let snapAgenda = await getDoc(refAgenda);
+                if (snapAgenda.exists()) {
+                    agendaHospital = snapAgenda.data().agenda || {};
+                    localStorage.setItem('psico_agenda', JSON.stringify(agendaHospital));
+                } else {
+                    await setDoc(refAgenda, { agenda: agendaHospital });
+                }
+            } catch(e) { console.error("Modo offline o error de red:", e); }
         },
-        async saveDb(items) {
+        async guardarTodo() {
+            localStorage.setItem('psico_db', JSON.stringify(db));
+            localStorage.setItem('psico_agenda', JSON.stringify(agendaHospital));
+            localStorage.setItem('psico_espera', listaEsperaData);
+            localStorage.setItem('psico_ex', JSON.stringify(exPacientesDb));
+
+            if (!dbFirestore) return;
             try {
-                let ref = doc(dbFirestore, "datos", "general_db");
-                await setDoc(ref, { items });
-            } catch(e) { console.error(e); alert("Error al guardar en la nube."); }
-        },
-        async getAgendaHospital() {
-            try {
-                let ref = doc(dbFirestore, "datos", "agenda_hospital");
-                let snap = await getDoc(ref);
-                if (snap.exists()) return snap.data().agenda || {};
-            } catch(e) { console.error(e); }
-            return {};
-        },
-        async saveAgendaHospital(agenda) {
-            try {
-                let ref = doc(dbFirestore, "datos", "agenda_hospital");
-                await setDoc(ref, { agenda });
-            } catch(e) { console.error(e); }
-        },
-        async getListaEspera() {
-            try {
-                let ref = doc(dbFirestore, "datos", "lista_espera");
-                let snap = await getDoc(ref);
-                if (snap.exists()) return snap.data().texto || '';
-            } catch(e) { console.error(e); }
-            return '';
-        },
-        async saveListaEspera(texto) {
-            try {
-                let ref = doc(dbFirestore, "datos", "lista_espera");
-                await setDoc(ref, { texto });
-            } catch(e) { console.error(e); }
-        },
-        async getExPacientes() {
-            try {
-                let ref = doc(dbFirestore, "datos", "ex_pacientes");
-                let snap = await getDoc(ref);
-                if (snap.exists()) return snap.data().items || [];
-            } catch(e) { console.error(e); }
-            return [];
-        },
-        async saveExPacientes(items) {
-            try {
-                let ref = doc(dbFirestore, "datos", "ex_pacientes");
-                await setDoc(ref, { items });
-            } catch(e) { console.error(e); }
+                await setDoc(doc(dbFirestore, "datos", "general_db"), { items: db });
+                await setDoc(doc(dbFirestore, "datos", "agenda_hospital"), { agenda: agendaHospital });
+                await setDoc(doc(dbFirestore, "datos", "lista_espera"), { texto: listaEsperaData });
+                await setDoc(doc(dbFirestore, "datos", "ex_pacientes"), { items: exPacientesDb });
+            } catch(e) { console.error("No se pudo sincronizar con la nube, guardado local exitoso:", e); }
         }
     };
 
-    // Carga inicial al arrancar la app
-    async function initApp() {
-        db = await StorageService.getDb();
-        agendaHospital = await StorageService.getAgendaHospital();
-        listaEsperaData = await StorageService.getListaEspera();
-        exPacientesDb = await StorageService.getExPacientes();
-    }
-    initApp();
+    StorageService.sincronizarRemoto();
 
     window.iniciarModulo = function(ambito) {
         ambitoActual = ambito;
@@ -303,7 +283,7 @@
 
     window.guardarEspera = async function() {
         listaEsperaData = document.getElementById('lista-espera').value;
-        await StorageService.saveListaEspera(listaEsperaData);
+        await StorageService.guardarTodo();
     };
 
     window.abrirDia = function(dia) {
@@ -345,7 +325,7 @@
         let dni = document.getElementById(`dni_t_${i}`).value;
 
         agendaHospital[diaActual][i] = { nombre, edad, dni };
-        await StorageService.saveAgendaHospital(agendaHospital);
+        await StorageService.guardarTodo();
     };
 
     window.abrirFichaTurno = function(i) {
@@ -375,32 +355,31 @@
         let t = agendaHospital[diaActual][i];
         if (!t || !t.nombre) return alert("Este turno ya está vacío.");
 
-        if (confirm(`¿Estás seguro de dar de alta a ${t.nombre}? El turno quedará libre y sus datos se moverán a Ex Pacientes.`)) {
-            let pIndex = db.findIndex(x => x.nombre === t.nombre && x.ambito.includes('HOSPITAL'));
+        if (confirm(`¿Estás seguro de dar de alta a ${t.nombre}?`)) {
+            let pIndex = db.findIndex(x => x.nombre === t.nombre);
             if (pIndex !== -1) {
                 exPacientesDb.push(db[pIndex]);
                 db.splice(pIndex, 1);
-                await StorageService.saveDb(db);
-                await StorageService.saveExPacientes(exPacientesDb);
             }
 
             agendaHospital[diaActual][i] = { nombre: '', edad: '', dni: '' };
-            await StorageService.saveAgendaHospital(agendaHospital);
+            await StorageService.guardarTodo();
             renderizarTurnosDia();
-            alert("Turno liberado y paciente archivado correctamente.");
+            renderizarExPacientes();
+            alert("Turno liberado correctamente.");
         }
     };
 
     function renderizarExPacientes() {
         let cont = document.getElementById('lista-ex-pacientes');
-        if (exPacientesDb.length === 0) {
-            cont.innerHTML = "<p style='color:#7f8c8d;'>No hay ex pacientes archivados todavía.</p>";
+        if (!exPacientesDb || exPacientesDb.length === 0) {
+            cont.innerHTML = "<p style='color:#7f8c8d;'>No hay ex pacientes archivados.</p>";
             return;
         }
         cont.innerHTML = exPacientesDb.map(p => `
             <div class="historial-card" style="border-left-color: #e67e22;">
-                <strong>Ex Paciente: ${p.nombre} (${p.ambito})</strong>
-                ${p.intervenciones.map(i => `
+                <strong>Ex Paciente: ${p.nombre} (${p.ambito || ''})</strong>
+                ${(p.intervenciones || []).map(i => `
                     <div style="margin-top:5px; font-size:0.9em; background:#fff; padding:5px; border-radius:3px;">
                         <strong>${i.tipo}</strong> - ${i.fecha}: ${i.obs}
                     </div>
@@ -411,21 +390,28 @@
 
     window.registrarIntervencion = async function() {
         let nombre = pacienteActualNombre;
+        let obsVal = document.getElementById('obs-nueva').value;
+        if (!obsVal) return alert("Por favor completá las observaciones.");
+
         let nueva = {
             id: Date.now(),
             tipo: document.getElementById('tipo-doc').value,
-            obs: document.getElementById('obs-nueva').value,
+            obs: obsVal,
             prompt: document.getElementById('prompt-box').value,
             respuesta: document.getElementById('respuesta-ia').value,
             fecha: new Date().toLocaleDateString()
         };
 
         let p = db.find(x => x.nombre === nombre && x.ambito === ambitoActual);
-        if (p) { p.intervenciones.push(nueva); }
-        else { db.push({ nombre, ambito: ambitoActual, intervenciones: [nueva] }); }
+        if (p) { 
+            if (!p.intervenciones) p.intervenciones = [];
+            p.intervenciones.push(nueva); 
+        } else { 
+            db.push({ nombre, ambito: ambitoActual, intervenciones: [nueva] }); 
+        }
 
-        await StorageService.saveDb(db);
-        alert("¡Guardado en la ficha del paciente (Nube)!");
+        await StorageService.guardarTodo();
+        alert("¡Intervención guardada con éxito!");
         document.getElementById('obs-nueva').value = '';
         document.getElementById('prompt-box').value = '';
         document.getElementById('respuesta-ia').value = '';
@@ -435,6 +421,10 @@
     function renderizarHistorial() {
         let cont = document.getElementById('lista-historial');
         let pacientes = db.filter(x => x.ambito === ambitoActual && x.nombre === pacienteActualNombre);
+        if (pacientes.length === 0 || !pacientes[0].intervenciones) {
+            cont.innerHTML = "<p style='color:#7f8c8d;'>No hay registros en el historial todavía.</p>";
+            return;
+        }
         cont.innerHTML = pacientes.map(p => `
             <div>
                 ${p.intervenciones.slice().reverse().map(i => `
@@ -450,33 +440,45 @@
 
     window.registrarIntervencionGen = async function() {
         let nombre = document.getElementById('nombre-paciente-gen').value;
-        if (!nombre) return alert("¡Poné un nombre!");
+        if (!nombre) return alert("¡Por favor ingresá el nombre del paciente!");
 
+        let obsVal = document.getElementById('obs-nueva-gen').value;
         let nueva = {
             id: Date.now(),
             tipo: document.getElementById('tipo-doc-gen').value,
-            obs: document.getElementById('obs-nueva-gen').value,
+            obs: obsVal,
             prompt: document.getElementById('prompt-box-gen').value,
             respuesta: document.getElementById('respuesta-ia-gen').value,
             fecha: new Date().toLocaleDateString()
         };
 
         let p = db.find(x => x.nombre === nombre && x.ambito === ambitoActual);
-        if (p) { p.intervenciones.push(nueva); }
-        else { db.push({ nombre, ambito: ambitoActual, intervenciones: [nueva] }); }
+        if (p) { 
+            if (!p.intervenciones) p.intervenciones = [];
+            p.intervenciones.push(nueva); 
+        } else { 
+            db.push({ nombre, ambito: ambitoActual, intervenciones: [nueva] }); 
+        }
 
-        await StorageService.saveDb(db);
-        alert("¡Guardado en la nube!");
+        await StorageService.guardarTodo();
+        alert("¡Intervención guardada con éxito!");
+        document.getElementById('obs-nueva-gen').value = '';
+        document.getElementById('prompt-box-gen').value = '';
+        document.getElementById('respuesta-ia-gen').value = '';
         renderizarHistorialGen();
     };
 
     function renderizarHistorialGen() {
         let cont = document.getElementById('lista-historial-gen');
         let pacientes = db.filter(x => x.ambito === ambitoActual);
+        if (pacientes.length === 0) {
+            cont.innerHTML = "<p style='color:#7f8c8d;'>No hay pacientes registrados en este ámbito.</p>";
+            return;
+        }
         cont.innerHTML = pacientes.map(p => `
-            <div>
+            <div style="background:#fff; padding:10px; margin:5px 0; border-radius:5px; border:1px solid #ddd;">
                 <h4>Paciente: ${p.nombre}</h4>
-                ${p.intervenciones.slice().reverse().map(i => `
+                ${(p.intervenciones || []).slice().reverse().map(i => `
                     <div class="historial-card">
                         <strong>${i.tipo}</strong> (${i.fecha})
                         <p style="margin:5px 0;"><strong>Obs:</strong> ${i.obs}</p>
@@ -487,17 +489,12 @@
         `).join('');
     }
 
-    window.exportarRespaldo = async function() {
-        let dataCompleta = {
-            db: await StorageService.getDb(),
-            agendaHospital: await StorageService.getAgendaHospital(),
-            listaEspera: await StorageService.getListaEspera(),
-            exPacientes: await StorageService.getExPacientes()
-        };
+    window.exportarRespaldo = function() {
+        let dataCompleta = { db, agendaHospital, listaEspera: listaEsperaData, exPacientes: exPacientesDb };
         let blob = new Blob([JSON.stringify(dataCompleta, null, 2)], { type: 'application/json' });
         let a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = 'Respaldo_Cloud_Psico.json';
+        a.download = 'Respaldo_Asistente_Psico.json';
         a.click();
     };
 
@@ -507,19 +504,16 @@
         let reader = new FileReader();
         reader.onload = async function(e) {
             try {
-                let dataCompleta = JSON.parse(e.target.result);
-                if (dataCompleta.db) {
-                    await StorageService.saveDb(dataCompleta.db);
-                    await StorageService.saveAgendaHospital(dataCompleta.agendaHospital || {});
-                    await StorageService.saveListaEspera(dataCompleta.listaEspera || '');
-                    await StorageService.saveExPacientes(dataCompleta.exPacientes || []);
-                } else {
-                    await StorageService.saveDb(dataCompleta);
-                }
-                alert("¡Respaldo cargado con éxito en Firebase!");
+                let data = JSON.parse(e.target.result);
+                db = data.db || [];
+                agendaHospital = data.agendaHospital || {};
+                listaEsperaData = data.listaEspera || '';
+                exPacientesDb = data.exPacientes || [];
+                await StorageService.guardarTodo();
+                alert("¡Respaldo cargado correctamente!");
                 location.reload();
             } catch (err) {
-                alert("El archivo no es válido.");
+                alert("Archivo no válido.");
             }
         };
         reader.readAsText(file);
@@ -532,8 +526,6 @@
         let p = `Redacta un/a ${tipo} para el/la paciente (DNI: ${dni}). Detalles clínicos: ${obs}`;
         document.getElementById('prompt-box').value = p;
     };
-
-    window.generrPromptGen = function() {}; // Alias por seguridad
 
     window.generarPromptGen = function() {
         let tipo = document.getElementById('tipo-doc-gen').value;
