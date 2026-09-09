@@ -110,9 +110,18 @@
         <button class="btn-menu" onclick="iniciarModulo('EIPRI')">👶 EIPRI</button>
         <button class="btn-menu" style="background:#16a085" onclick="iniciarMenuHospital()">🏥 HOSPITAL (Agenda y Consultorio)</button>
         <hr>
-        <button class="btn-menu" style="background:#8e44ad" onclick="document.getElementById('file-input').click()">📂 CARGAR RESPALDO</button>
+        <button class="btn-menu" style="background:#8e44ad" onclick="document.getElementById('file-input').click()">📂 CARGAR RESPALDO (Archivo)</button>
         <input type="file" id="file-input" accept=".json" onchange="cargarRespaldo(event)">
-        <button class="btn-menu" style="background:#d35400" onclick="exportarRespaldo()">DESCARGAR RESPALDO GENERAL</button>
+        
+        <!-- BOTÓN DE EMERGENCIA PARA PEGAR TEXTO DIRECTO -->
+        <button class="btn-menu" style="background:#d35400" onclick="toggleAreaPegado()">📋 PEGAR TEXTO DE RESPALDO (Emergencia)</button>
+        <div id="panel-pegar-respaldo" style="display:none; background:#f9f9f9; padding:15px; border:1px dashed #d35400; border-radius:5px; margin-top:10px;">
+            <p style="margin-top:0; font-size:0.9em;">Pegá acá abajo todo el contenido del archivo JSON de respaldo que trajiste del teléfono:</p>
+            <textarea id="texto-json-manual" rows="6" placeholder="{ 'db': [...], 'agendaHospital': {...} }"></textarea>
+            <button class="btn-menu" style="background:#27ae60; margin-top:5px;" onclick="aplicarRespaldoManual()">💾 APLICAR ESTE RESPALDO</button>
+        </div>
+
+        <button class="btn-menu" style="background:#34495e" onclick="exportarRespaldo()">DESCARGAR RESPALDO GENERAL</button>
     </div> 
 
     <!-- SUBMENÚ HOSPITAL (Días) -->
@@ -204,6 +213,29 @@
             localStorage.setItem('psico_agenda', JSON.stringify(agendaHospital));
             localStorage.setItem('psico_espera', listaEsperaData);
             localStorage.setItem('psico_ex', JSON.stringify(exPacientesDb));
+        }
+    };
+
+    window.toggleAreaPegado = function() {
+        let panel = document.getElementById('panel-pegar-respaldo');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    };
+
+    window.aplicarRespaldoManual = function() {
+        let texto = document.getElementById('texto-json-manual').value.trim();
+        if (!texto) return alert("Por favor pegá el texto JSON en el cuadro.");
+        try {
+            let data = JSON.parse(texto);
+            db = data.db || data.items || [];
+            agendaHospital = data.agendaHospital || data.agenda || {};
+            listaEsperaData = data.listaEspera || data.texto || '';
+            exPacientesDb = data.exPacientes || [];
+
+            StorageService.guardarTodo();
+            alert("¡Respaldo manual aplicado y guardado con éxito en la tablet!");
+            location.reload();
+        } catch (err) {
+            alert("El texto pegado no tiene un formato JSON válido: " + err.message);
         }
     };
 
@@ -449,7 +481,6 @@
         reader.onload = function(e) {
             try {
                 let data = JSON.parse(e.target.result);
-                
                 db = data.db || data.items || [];
                 agendaHospital = data.agendaHospital || data.agenda || {};
                 listaEsperaData = data.listaEspera || data.texto || '';
