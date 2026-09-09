@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asistente Psicopedagógico</title>
+<style>
+    body {
+        font-family: sans-serif;
+        background: #f4f7f6;
+        padding: 15px;
+        color: #333;
+        margin: 0;
+    }
+
+    .container {
+        max-width: 900px;
+        margin: auto;
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .btn-menu {
+        width: 100%;
+        padding: 15px;
+        margin: 8px 0;
+        background: #2c3e50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 1em;
+        text-align: center;
+        box-sizing: border-box;
+    }
+
+    .btn-menu:hover {
+        opacity: 0.9;
+    }
+
+    textarea, input, select {
+        width: 100%;
+        padding: 10px;
+        margin: 5px 0;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+        font-size: 1em;
+    }
+
+    .historial-card {
+        border-left: 5px solid #27ae60;
+        padding: 12px;
+        background: #f9f9f9;
+        margin: 10px 0;
+        position: relative;
+        border-radius: 4px;
+    }
+
+    .btn-delete {
+        background: #e74c3c;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        cursor: pointer;
+        border-radius: 3px;
+        font-size: 0.85em;
+    }
+
+    .turno-box {
+        background: #eef2f3;
+        padding: 12px;
+        margin: 10px 0;
+        border-radius: 6px;
+        border: 1px solid #d1d8e0;
+    }
+
+    .grid-turnos {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    @media(max-width: 600px) {
+        .grid-turnos {
+            grid-template-columns: 1fr;
+        }
+        body {
+            padding: 5px;
+        }
+        .container {
+            padding: 10px;
+        }
+    }
+
+    #file-input {
+        display: none;
+    }
+</style>
+</head>
+<body> 
+
+<div class="container">
+    <!-- MENÚ PRINCIPAL -->
+    <div id="nav-menu">
+        <h1>Ámbito de Trabajo</h1>
+        <button class="btn-menu" onclick="iniciarModulo('ESCUELA')">🏫 ESCUELA</button>
+        <button class="btn-menu" onclick="iniciarModulo('EIPRI')">👶 EIPRI</button>
+        <button class="btn-menu" style="background:#16a085" onclick="iniciarMenuHospital()">🏥 HOSPITAL (Agenda y Consultorio)</button>
+        <hr>
+        <button class="btn-menu" style="background:#8e44ad" onclick="document.getElementById('file-input').click()">📂 CARGAR RESPALDO DESDE DRIVE</button>
+        <input type="file" id="file-input" accept=".json" onchange="cargarRespaldo(event)">
+        <button class="btn-menu" style="background:#d35400" onclick="exportarRespaldo()">3. DESCARGAR RESPALDO GENERAL</button>
+    </div> 
+
+    <!-- SUBMENÚ HOSPITAL (Días) -->
+    <div id="hospital-dias" style="display:none;">
+        <button onclick="location.reload()">⬅ Volver al Menú Principal</button>
+        <h2>🏥 Agenda Hospital - Seleccioná el Día</h2>
+        <button class="btn-menu" onclick="abrirDia('Lunes')">📅 LUNES (6 Turnos)</button>
+        <button class="btn-menu" onclick="abrirDia('Martes')">📅 MARTES (6 Turnos)</button>
+        <button class="btn-menu" onclick="abrirDia('Miercoles')">📅 MIÉRCOLES (6 Turnos)</button>
+        <button class="btn-menu" onclick="abrirDia('Jueves')">📅 JUEVES (6 Turnos)</button>
+        <hr>
+        <h3>📋 Lista de Espera</h3>
+        <textarea id="lista-espera" placeholder="Anotá aquí pacientes en lista de espera..." oninput="guardarEspera()"></textarea>
+        <hr>
+        <h3>📁 Ex Pacientes (Altas / Archivados)</h3>
+        <div id="lista-ex-pacientes"></div>
+    </div> 
+
+    <!-- VISTA DE TURNOS DE UN DÍA -->
+    <div id="hospital-turnos-view" style="display:none;">
+        <button onclick="iniciarMenuHospital()">⬅ Volver a Días</button>
+        <h2 id="titulo-dia"></h2>
+        <div id="contenedor-6-turnos"></div>
+    </div> 
+
+    <!-- ÁREA DE TRABAJO PACIENTE (Ficha Individual) -->
+    <div id="work-area" style="display:none;">
+        <button onclick="volverDesdeFicha()">⬅ Volver a la Agenda</button>
+        <h2 id="titulo-ambito"></h2> 
+
+        <input type="text" id="nombre-paciente" placeholder="Nombre del Paciente" readonly style="background:#eee;">
+        <input type="text" id="dni-paciente" placeholder="DNI del Paciente" readonly style="background:#eee;">
+        <select id="tipo-doc">
+            <option>Informe</option>
+            <option>Acta</option>
+            <option>Historia Clínica</option>
+        </select>
+        <textarea id="obs-nueva" placeholder="Observaciones / Motivo..."></textarea> 
+
+        <button class="btn-menu" onclick="generarPrompt()">1. GENERAR PROMPT</button>
+        <textarea id="prompt-box" rows="3"></textarea>
+        <textarea id="respuesta-ia" rows="5" placeholder="Pega aquí la respuesta de la IA..."></textarea> 
+
+        <button class="btn-menu" style="background:#27ae60" onclick="registrarIntervencion()">2. GUARDAR INTERVENCIÓN</button> 
+
+        <h3>📂 Historial del Paciente:</h3>
+        <div id="lista-historial"></div>
+    </div> 
+
+    <!-- MÓDULO ESCUELA / EIPRI (Estándar) -->
+    <div id="work-area-general" style="display:none;">
+        <button onclick="location.reload()">⬅ Volver</button>
+        <h2 id="titulo-ambito-gen"></h2> 
+
+        <input type="text" id="nombre-paciente-gen" placeholder="Nombre del Paciente">
+        <select id="tipo-doc-gen">
+            <option>Informe</option>
+            <option>Acta</option>
+            <option>Historia Clínica</option>
+        </select>
+        <textarea id="obs-nueva-gen" placeholder="Observaciones / Motivo..."></textarea> 
+
+        <button class="btn-menu" onclick="generarPromptGen()">1. GENERAR PROMPT</button>
+        <textarea id="prompt-box-gen" rows="3"></textarea>
+        <textarea id="respuesta-ia-gen" rows="5" placeholder="Pega aquí la respuesta de la IA..."></textarea> 
+
+        <button class="btn-menu" style="background:#27ae60" onclick="registrarIntervencionGen()">2. GUARDAR INTERVENCIÓN</button> 
+
+        <h3>📂 Historial:</h3>
+        <div id="lista-historial-gen"></div>
+    </div>
+</div> 
+
+<script>
+    // Capa de Servicio Local (Simulando persistencia desacoplada para futura migración a Firebase)
+    const StorageService = {
+        async getDb() { return JSON.parse(localStorage.getItem('psico_db') || '[]'); },
+        async saveDb(db) { localStorage.setItem('psico_db', JSON.stringify(db)); },
+        async getAgendaHospital() { return JSON.parse(localStorage.getItem('psico_agenda_hospital') || '{}'); },
+        async saveAgendaHospital(agenda) { localStorage.setItem('psico_agenda_hospital', JSON.stringify(agenda)); },
+        async getListaEspera() { return localStorage.getItem('psico_espera') || ''; },
+        async saveListaEspera(texto) { localStorage.setItem('psico_espera', texto); },
+        async getExPacientes() { return JSON.parse(localStorage.getItem('psico_ex_pacientes') || '[]'); },
+        async saveExPacientes(exPacientes) { localStorage.setItem('psico_ex_pacientes', JSON.stringify(exPacientes)); }
+    };
+
+    let db = [];
+    let agendaHospital = {};
+    let listaEsperaData = '';
+    let exPacientesDb = [];
+
+    let ambitoActual = '';
+    let diaActual = '';
+    let turnoActualIdx = null;
+    let pacienteActualNombre = '';
+
+    // Inicializar datos al cargar la app
+    async function initApp() {
+        db = await StorageService.getDb();
+        agendaHospital = await StorageService.getAgendaHospital();
+        listaEsperaData = await StorageService.getListaEspera();
+        exPacientesDb = await StorageService.getExPacientes();
+    }
+    initApp();
+
+    window.iniciarModulo = function(ambito) {
+        ambitoActual = ambito;
+        document.getElementById('nav-menu').style.display = 'none';
+        document.getElementById('work-area-general').style.display = 'block';
+        document.getElementById('titulo-ambito-gen').innerText = "Ámbito: " + ambito;
+        renderizarHistorialGen();
+    };
+
+    window.iniciarMenuHospital = function() {
+        document.getElementById('nav-menu').style.display = 'none';
+        document.getElementById('work-area').style.display = 'none';
+        document.getElementById('hospital-turnos-view').style.display = 'none';
+        document.getElementById('hospital-dias').style.display = 'block';
+
+        document.getElementById('lista-espera').value = listaEsperaData;
+        renderizarExPacientes();
+    };
+
+    window.guardarEspera = async function() {
+        listaEsperaData = document.getElementById('lista-espera').value;
+        await StorageService.saveListaEspera(listaEsperaData);
+    };
+
+    window.abrirDia = function(dia) {
+        diaActual = dia;
+        document.getElementById('hospital-dias').style.display = 'none';
+        document.getElementById('hospital-turnos-view').style.display = 'block';
+        document.getElementById('titulo-dia').innerText = "Turnos del Día: " + dia;
+        renderizarTurnosDia();
+    };
+
+    function renderizarTurnosDia() {
+        let cont = document.getElementById('contenedor-6-turnos');
+        if (!agendaHospital[diaActual]) {
+            agendaHospital[diaActual] = Array(6).fill({ nombre: '', edad: '', dni: '' });
+        }
+
+        let html = '';
+        for (let i = 0; i < 6; i++) {
+            let t = agendaHospital[diaActual][i] || { nombre: '', edad: '', dni: '' };
+            html += `
+                <div class="turno-box">
+                    <strong>Turno ${i + 1}</strong>
+                    <input type="text" id="nombre_t_${i}" placeholder="Nombre del Paciente" value="${t.nombre}" onchange="actualizarTurno(${i})">
+                    <div class="grid-turnos">
+                        <input type="text" id="edad_t_${i}" placeholder="Edad" value="${t.edad}" onchange="actualizarTurno(${i})">
+                        <input type="text" id="dni_t_${i}" placeholder="DNI" value="${t.dni}" onchange="actualizarTurno(${i})">
+                    </div>
+                    <button class="btn-menu" style="margin-top:5px; background:#2980b9;" onclick="abrirFichaTurno(${i})">📁 Ficha / Escrituras</button>
+                    <button class="btn-delete" style="width:100%; margin-top:5px;" onclick="liberarTurno(${i})">🔄 Dar de Alta / Liberar Turno</button>
+                </div>
+            `;
+        }
+        cont.innerHTML = html;
+    }
+
+    window.actualizarTurno = async function(i) {
+        let nombre = document.getElementById(`nombre_t_${i}`).value;
+        let edad = document.getElementById(`edad_t_${i}`).value;
+        let dni = document.getElementById(`dni_t_${i}`).value;
+
+        agendaHospital[diaActual][i] = { nombre, edad, dni };
+        await StorageService.saveAgendaHospital(agendaHospital);
+    };
+
+    window.abrirFichaTurno = function(i) {
+        let t = agendaHospital[diaActual][i];
+        if (!t || !t.nombre) return alert("Primero ingresá al menos el nombre del paciente en este turno.");
+
+        turnoActualIdx = i;
+        pacienteActualNombre = t.nombre;
+        ambitoActual = "HOSPITAL - " + diaActual;
+
+        document.getElementById('hospital-turnos-view').style.display = 'none';
+        document.getElementById('work-area').style.display = 'block';
+        document.getElementById('titulo-ambito').innerText = `Consultorio: ${t.nombre} (Turno ${i + 1})`;
+        document.getElementById('nombre-paciente').value = t.nombre;
+        document.getElementById('dni-paciente').value = t.dni || '';
+
+        renderizarHistorial();
+    };
+
+    window.volverDesdeFicha = function() {
+        document.getElementById('work-area').style.display = 'none';
+        document.getElementById('hospital-turnos-view').style.display = 'block';
+        renderizarTurnosDia();
+    };
+
+    window.liberarTurno = async function(i) {
+        let t = agendaHospital[diaActual][i];
+        if (!t || !t.nombre) return alert("Este turno ya está vacío.");
+
+        if (confirm(`¿Estás seguro de dar de alta a ${t.nombre}? El turno quedará libre y sus datos se moverán a Ex Pacientes.`)) {
+            let pIndex = db.findIndex(x => x.nombre === t.nombre && x.ambito.includes('HOSPITAL'));
+            if (pIndex !== -1) {
+                exPacientesDb.push(db[pIndex]);
+                db.splice(pIndex, 1);
+                await StorageService.saveDb(db);
+                await StorageService.saveExPacientes(exPacientesDb);
+            }
+
+            agendaHospital[diaActual][i] = { nombre: '', edad: '', dni: '' };
+            await StorageService.saveAgendaHospital(agendaHospital);
+            renderizarTurnosDia();
+            alert("Turno liberado y paciente archivado correctamente.");
+        }
+    };
+
+    function renderizarExPacientes() {
+        let cont = document.getElementById('lista-ex-pacientes');
+        if (exPacientesDb.length === 0) {
+            cont.innerHTML = "<p style='color:#7f8c8d;'>No hay ex pacientes archivados todavía.</p>";
+            return;
+        }
+        cont.innerHTML = exPacientesDb.map(p => `
+            <div class="historial-card" style="border-left-color: #e67e22;">
+                <strong>Ex Paciente: ${p.nombre} (${p.ambito})</strong>
+                ${p.intervenciones.map(i => `
+                    <div style="margin-top:5px; font-size:0.9em; background:#fff; padding:5px; border-radius:3px;">
+                        <strong>${i.tipo}</strong> - ${i.fecha}: ${i.obs}
+                    </div>
+                `).join('')}
+            </div>
+        `).join('');
+    }
+
+    window.registrarIntervencion = async function() {
+        let nombre = pacienteActualNombre;
+        let nueva = {
+            id: Date.now(),
+            tipo: document.getElementById('tipo-doc').value,
+            obs: document.getElementById('obs-nueva').value,
+            prompt: document.getElementById('prompt-box').value,
+            respuesta: document.getElementById('respuesta-ia').value,
+            fecha: new Date().toLocaleDateString()
+        };
+
+        let p = db.find(x => x.nombre === nombre && x.ambito === ambitoActual);
+        if (p) { p.intervenciones.push(nueva); }
+        else { db.push({ nombre, ambito: ambitoActual, intervenciones: [nueva] }); }
+
+        await StorageService.saveDb(db);
+        alert("¡Guardado en la ficha del paciente!");
+        document.getElementById('obs-nueva').value = '';
+        document.getElementById('prompt-box').value = '';
+        document.getElementById('respuesta-ia').value = '';
+        renderizarHistorial();
+    };
+
+    function renderizarHistorial() {
+        let cont = document.getElementById('lista-historial');
+        let pacientes = db.filter(x => x.ambito === ambitoActual && x.nombre === pacienteActualNombre);
+        cont.innerHTML = pacientes.map(p => `
+            <div>
+                ${p.intervenciones.slice().reverse().map(i => `
+                    <div class="historial-card">
+                        <strong>${i.tipo}</strong> (${i.fecha})
+                        <p style="margin:5px 0;"><strong>Obs:</strong> ${i.obs}</p>
+                        <p style="font-size:0.9em; margin:5px 0; background: #fff; padding: 5px; border-radius:3px;">${i.respuesta || "Sin respuesta"}</p>
+                    </div>
+                `).join('')}
+            </div>
+        `).join('');
+    }
+
+    window.registrarIntervencionGen = async function() {
+        let nombre = document.getElementById('nombre-paciente-gen').value;
+        if (!nombre) return alert("¡Poné un nombre!");
+
+        let nueva = {
+            id: Date.now(),
+            tipo: document.getElementById('tipo-doc-gen').value,
+            obs: document.getElementById('obs-nueva-gen').value,
+            prompt: document.getElementById('prompt-box-gen').value,
+            respuesta: document.getElementById('respuesta-ia-gen').value,
+            fecha: new Date().toLocaleDateString()
+        };
+
+        let p = db.find(x => x.nombre === nombre && x.ambito === ambitoActual);
+        if (p) { p.intervenciones.push(nueva); }
+        else { db.push({ nombre, ambito: ambitoActual, intervenciones: [nueva] }); }
+
+        await StorageService.saveDb(db);
+        alert("¡Guardado!");
+        renderizarHistorialGen();
+    };
+
+    function renderizarHistorialGen() {
+        let cont = document.getElementById('lista-historial-gen');
+        let pacientes = db.filter(x => x.ambito === ambitoActual);
+        cont.innerHTML = pacientes.map(p => `
+            <div>
+                <h4>Paciente: ${p.nombre}</h4>
+                ${p.intervenciones.slice().reverse().map(i => `
+                    <div class="historial-card">
+                        <strong>${i.tipo}</strong> (${i.fecha})
+                        <p style="margin:5px 0;"><strong>Obs:</strong> ${i.obs}</p>
+                        <p style="font-size:0.9em; margin:5px 0; background: #fff; padding: 5px; border-radius:3px;">${i.respuesta || "Sin respuesta"}</p>
+                    </div>
+                `).join('')}
+            </div>
+        `).join('');
+    }
+
+    window.exportarRespaldo = async function() {
+        let dataCompleta = {
+            db: await StorageService.getDb(),
+            agendaHospital: await StorageService.getAgendaHospital(),
+            listaEspera: await StorageService.getListaEspera(),
+            exPacientes: await StorageService.getExPacientes()
+        };
+        let blob = new Blob([JSON.stringify(dataCompleta, null, 2)], { type: 'application/json' });
+        let a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'Respaldo_Completo_Psico.json';
+        a.click();
+    };
+
+    window.cargarRespaldo = async function(event) {
+        let file = event.target.files[0];
+        if (!file) return;
+        let reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                let dataCompleta = JSON.parse(e.target.result);
+                if (dataCompleta.db) {
+                    await StorageService.saveDb(dataCompleta.db);
+                    await StorageService.saveAgendaHospital(dataCompleta.agendaHospital || {});
+                    await StorageService.saveListaEspera(dataCompleta.listaEspera || '');
+                    await StorageService.saveExPacientes(dataCompleta.exPacientes || []);
+                } else {
+                    await StorageService.saveDb(dataCompleta);
+                }
+                alert("¡Respaldo cargado con éxito en todos los módulos!");
+                location.reload();
+            } catch (err) {
+                alert("El archivo no es válido.");
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    window.generarPrompt = function() {
+        let tipo = document.getElementById('tipo-doc').value;
+        let dni = document.getElementById('dni-paciente').value;
+        let obs = document.getElementById('obs-nueva').value;
+        let p = `Redacta un/a ${tipo} para el/la paciente (DNI: ${dni}). Detalles clínicos: ${obs}`;
+        document.getElementById('prompt-box').value = p;
+    };
+
+    window.generarPromptGen = function() {
+        let tipo = document.getElementById('tipo-doc-gen').value;
+        let obs = document.getElementById('obs-nueva-gen').value;
+        let p = `Redacta un/a ${tipo} basado en las siguientes observaciones: ${obs}`;
+        document.getElementById('prompt-box-gen').value = p;
+    };
+</script>
+</body>
+</html>
