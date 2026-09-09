@@ -105,7 +105,7 @@
 <div class="container">
     <!-- MENÚ PRINCIPAL -->
     <div id="nav-menu">
-        <h1>Ámbito de Trabajo</h1>
+        <h1>Ámbito de Trabajo (Nube Firebase)</h1>
         <button class="btn-menu" onclick="iniciarModulo('ESCUELA')">🏫 ESCUELA</button>
         <button class="btn-menu" onclick="iniciarModulo('EIPRI')">👶 EIPRI</button>
         <button class="btn-menu" style="background:#16a085" onclick="iniciarMenuHospital()">🏥 HOSPITAL (Agenda y Consultorio)</button>
@@ -186,17 +186,82 @@
     </div>
 </div> 
 
-<script>
-    // Capa de Servicio Local (Simulando persistencia desacoplada para futura migración a Firebase)
+<!-- SDKs de Firebase (Firestore) -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyB8pQAGYIrwR5cc7klpI6DnTeGbmh7_Uo",
+        authDomain: "asistentex-c1c6d.firebaseapp.com",
+        projectId: "asistentex-c1c6d",
+        storageBucket: "asistentex-c1c6d.firebasestorage.app",
+        messagingSenderId: "817247363115",
+        appId: "1:817247363115:web:2632ced33bc82c7e85ca6e",
+        measurementId: "G-D6SZ491VNZ"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const dbFirestore = getFirestore(app);
+
+    // Capa de Servicio conectada a Firebase Cloud Firestore
     const StorageService = {
-        async getDb() { return JSON.parse(localStorage.getItem('psico_db') || '[]'); },
-        async saveDb(db) { localStorage.setItem('psico_db', JSON.stringify(db)); },
-        async getAgendaHospital() { return JSON.parse(localStorage.getItem('psico_agenda_hospital') || '{}'); },
-        async saveAgendaHospital(agenda) { localStorage.setItem('psico_agenda_hospital', JSON.stringify(agenda)); },
-        async getListaEspera() { return localStorage.getItem('psico_espera') || ''; },
-        async saveListaEspera(texto) { localStorage.setItem('psico_espera', texto); },
-        async getExPacientes() { return JSON.parse(localStorage.getItem('psico_ex_pacientes') || '[]'); },
-        async saveExPacientes(exPacientes) { localStorage.setItem('psico_ex_pacientes', JSON.stringify(exPacientes)); }
+        async getDb() {
+            try {
+                let ref = doc(dbFirestore, "datos", "general_db");
+                let snap = await getDoc(ref);
+                if (snap.exists()) return snap.data().items || [];
+            } catch(e) { console.error(e); }
+            return [];
+        },
+        async saveDb(items) {
+            try {
+                let ref = doc(dbFirestore, "datos", "general_db");
+                await setDoc(ref, { items });
+            } catch(e) { console.error(e); }
+        },
+        async getAgendaHospital() {
+            try {
+                let ref = doc(dbFirestore, "datos", "agenda_hospital");
+                let snap = await getDoc(ref);
+                if (snap.exists()) return snap.data().agenda || {};
+            } catch(e) { console.error(e); }
+            return {};
+        },
+        async saveAgendaHospital(agenda) {
+            try {
+                let ref = doc(dbFirestore, "datos", "agenda_hospital");
+                await setDoc(ref, { agenda });
+            } catch(e) { console.error(e); }
+        },
+        async getListaEspera() {
+            try {
+                let ref = doc(dbFirestore, "datos", "lista_espera");
+                let snap = await getDoc(ref);
+                if (snap.exists()) return snap.data().texto || '';
+            } catch(e) { console.error(e); }
+            return '';
+        },
+        async saveListaEspera(texto) {
+            try {
+                let ref = doc(dbFirestore, "datos", "lista_espera");
+                await setDoc(ref, { texto });
+            } catch(e) { console.error(e); }
+        },
+        async getExPacientes() {
+            try {
+                let ref = doc(dbFirestore, "datos", "ex_pacientes");
+                let snap = await getDoc(ref);
+                if (snap.exists()) return snap.data().items || [];
+            } catch(e) { console.error(e); }
+            return [];
+        },
+        async saveExPacientes(items) {
+            try {
+                let ref = doc(dbFirestore, "datos", "ex_pacientes");
+                await setDoc(ref, { items });
+            } catch(e) { console.error(e); }
+        }
     };
 
     let db = [];
@@ -209,7 +274,6 @@
     let turnoActualIdx = null;
     let pacienteActualNombre = '';
 
-    // Inicializar datos al cargar la app
     async function initApp() {
         db = await StorageService.getDb();
         agendaHospital = await StorageService.getAgendaHospital();
@@ -360,7 +424,7 @@
         else { db.push({ nombre, ambito: ambitoActual, intervenciones: [nueva] }); }
 
         await StorageService.saveDb(db);
-        alert("¡Guardado en la ficha del paciente!");
+        alert("¡Guardado en la ficha del paciente (Nube)!");
         document.getElementById('obs-nueva').value = '';
         document.getElementById('prompt-box').value = '';
         document.getElementById('respuesta-ia').value = '';
@@ -401,7 +465,7 @@
         else { db.push({ nombre, ambito: ambitoActual, intervenciones: [nueva] }); }
 
         await StorageService.saveDb(db);
-        alert("¡Guardado!");
+        alert("¡Guardado en la nube!");
         renderizarHistorialGen();
     };
 
@@ -432,7 +496,7 @@
         let blob = new Blob([JSON.stringify(dataCompleta, null, 2)], { type: 'application/json' });
         let a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = 'Respaldo_Completo_Psico.json';
+        a.download = 'Respaldo_Cloud_Psico.json';
         a.click();
     };
 
@@ -451,7 +515,7 @@
                 } else {
                     await StorageService.saveDb(dataCompleta);
                 }
-                alert("¡Respaldo cargado con éxito en todos los módulos!");
+                alert("¡Respaldo cargado con éxito en Firebase!");
                 location.reload();
             } catch (err) {
                 alert("El archivo no es válido.");
