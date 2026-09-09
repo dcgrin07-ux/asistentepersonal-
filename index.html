@@ -186,28 +186,9 @@
     </div>
 </div> 
 
-<!-- SDKs de Firebase y Lógica Robusta -->
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-    const firebaseConfig = {
-        apiKey: "AIzaSyB8pQAGYIrwR5cc7klpI6DnTeGbmh7_Uo",
-        authDomain: "asistentex-c1c6d.firebaseapp.com",
-        projectId: "asistentex-c1c6d",
-        storageBucket: "asistentex-c1c6d.firebasestorage.app",
-        messagingSenderId: "817247363115",
-        appId: "1:817247363115:web:2632ced33bc82c7e85ca6e",
-        measurementId: "G-D6SZ491VNZ"
-    };
-
-    let dbFirestore = null;
-    try {
-        const app = initializeApp(firebaseConfig);
-        dbFirestore = getFirestore(app);
-    } catch(e) { console.warn("Firebase bloqueado o sin red en este dispositivo:", e); }
-
-    // Memoria local principal (Garantiza funcionamiento inmediato 100% en tablets/celulares)
+<!-- Lógica Local Blindada -->
+<script>
+    // Memoria local principal
     let db = JSON.parse(localStorage.getItem('psico_db') || '[]');
     let agendaHospital = JSON.parse(localStorage.getItem('psico_agenda') || '{}');
     let listaEsperaData = localStorage.getItem('psico_espera') || '';
@@ -218,48 +199,14 @@
     let turnoActualIdx = null;
     let pacienteActualNombre = '';
 
-    // Gestor de almacenamiento inteligente
     const StorageService = {
-        async sincronizarRemoto() {
-            if (!dbFirestore) return;
-            try {
-                let ref = doc(dbFirestore, "datos", "general_db");
-                let snap = await getDoc(ref);
-                if (snap.exists()) {
-                    let remoteItems = snap.data().items || [];
-                    if (remoteItems.length > 0) {
-                        db = remoteItems;
-                        localStorage.setItem('psico_db', JSON.stringify(db));
-                    }
-                }
-                
-                let refAgenda = doc(dbFirestore, "datos", "agenda_hospital");
-                let snapAgenda = await getDoc(refAgenda);
-                if (snapAgenda.exists()) {
-                    agendaHospital = snapAgenda.data().agenda || {};
-                    localStorage.setItem('psico_agenda', JSON.stringify(agendaHospital));
-                }
-            } catch(e) { console.log("Trabajando con almacenamiento local (modo seguro)"); }
-        },
-        async guardarTodo() {
-            // Guardado local inmediato (nunca falla en tablets)
+        guardarTodo() {
             localStorage.setItem('psico_db', JSON.stringify(db));
             localStorage.setItem('psico_agenda', JSON.stringify(agendaHospital));
             localStorage.setItem('psico_espera', listaEsperaData);
             localStorage.setItem('psico_ex', JSON.stringify(exPacientesDb));
-
-            // Intento de respaldo secundario en la nube en segundo plano (sin bloquear la app si la tablet lo rechaza)
-            if (!dbFirestore) return;
-            try {
-                setDoc(doc(dbFirestore, "datos", "general_db"), { items: db }).catch(() => {});
-                setDoc(doc(dbFirestore, "datos", "agenda_hospital"), { agenda: agendaHospital }).catch(() => {});
-                setDoc(doc(dbFirestore, "datos", "lista_espera"), { texto: listaEsperaData }).catch(() => {});
-                setDoc(doc(dbFirestore, "datos", "ex_pacientes"), { items: exPacientesDb }).catch(() => {});
-            } catch(e) {}
         }
     };
-
-    StorageService.sincronizarRemoto();
 
     window.iniciarModulo = function(ambito) {
         ambitoActual = ambito;
@@ -279,9 +226,9 @@
         renderizarExPacientes();
     };
 
-    window.guardarEspera = async function() {
+    window.guardarEspera = function() {
         listaEsperaData = document.getElementById('lista-espera').value;
-        await StorageService.guardarTodo();
+        StorageService.guardarTodo();
     };
 
     window.abrirDia = function(dia) {
@@ -317,13 +264,13 @@
         cont.innerHTML = html;
     }
 
-    window.actualizarTurno = async function(i) {
+    window.actualizarTurno = function(i) {
         let nombre = document.getElementById(`nombre_t_${i}`).value;
         let edad = document.getElementById(`edad_t_${i}`).value;
         let dni = document.getElementById(`dni_t_${i}`).value;
 
         agendaHospital[diaActual][i] = { nombre, edad, dni };
-        await StorageService.guardarTodo();
+        StorageService.guardarTodo();
     };
 
     window.abrirFichaTurno = function(i) {
@@ -349,7 +296,7 @@
         renderizarTurnosDia();
     };
 
-    window.liberarTurno = async function(i) {
+    window.liberarTurno = function(i) {
         let t = agendaHospital[diaActual][i];
         if (!t || !t.nombre) return alert("Este turno ya está vacío.");
 
@@ -361,7 +308,7 @@
             }
 
             agendaHospital[diaActual][i] = { nombre: '', edad: '', dni: '' };
-            await StorageService.guardarTodo();
+            StorageService.guardarTodo();
             renderizarTurnosDia();
             renderizarExPacientes();
             alert("Turno liberado correctamente.");
@@ -386,7 +333,7 @@
         `).join('');
     }
 
-    window.registrarIntervencion = async function() {
+    window.registrarIntervencion = function() {
         let nombre = pacienteActualNombre;
         let obsVal = document.getElementById('obs-nueva').value;
         if (!obsVal) return alert("Por favor completá las observaciones.");
@@ -408,7 +355,7 @@
             db.push({ nombre, ambito: ambitoActual, intervenciones: [nueva] }); 
         }
 
-        await StorageService.guardarTodo();
+        StorageService.guardarTodo();
         alert("¡Intervención guardada con éxito!");
         document.getElementById('obs-nueva').value = '';
         document.getElementById('prompt-box').value = '';
@@ -436,7 +383,7 @@
         `).join('');
     }
 
-    window.registrarIntervencionGen = async function() {
+    window.registrarIntervencionGen = function() {
         let nombre = document.getElementById('nombre-paciente-gen').value;
         if (!nombre) return alert("¡Por favor ingresá el nombre del paciente!");
 
@@ -458,7 +405,7 @@
             db.push({ nombre, ambito: ambitoActual, intervenciones: [nueva] }); 
         }
 
-        await StorageService.guardarTodo();
+        StorageService.guardarTodo();
         alert("¡Intervención guardada con éxito!");
         document.getElementById('obs-nueva-gen').value = '';
         document.getElementById('prompt-box-gen').value = '';
@@ -496,22 +443,25 @@
         a.click();
     };
 
-    window.cargarRespaldo = async function(event) {
+    window.cargarRespaldo = function(event) {
         let file = event.target.files[0];
         if (!file) return;
         let reader = new FileReader();
-        reader.onload = async function(e) {
+        reader.onload = function(e) {
             try {
                 let data = JSON.parse(e.target.result);
-                db = data.db || [];
-                agendaHospital = data.agendaHospital || {};
-                listaEsperaData = data.listaEspera || '';
+                
+                // Mapeo flexible para asegurar compatibilidad con cualquier formato de respaldo
+                db = data.db || data.items || [];
+                agendaHospital = data.agendaHospital || data.agenda || {};
+                listaEsperaData = data.listaEspera || data.texto || '';
                 exPacientesDb = data.exPacientes || [];
-                await StorageService.guardarTodo();
-                alert("¡Respaldo cargado correctamente!");
+
+                StorageService.guardarTodo();
+                alert("¡Respaldo cargado con éxito y aplicado en la tablet!");
                 location.reload();
             } catch (err) {
-                alert("Archivo no válido.");
+                alert("El archivo no es válido.");
             }
         };
         reader.readAsText(file);
